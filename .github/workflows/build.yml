@@ -1,0 +1,19 @@
+name: Deploy
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/sub-store
+    paths-ignore:
+      - ".gitignore"
+      - "LICENSE"
+      - "README.md"
+jobs:
+  build:
+    name: Build
+    runs-on: [self-hosted]
+    steps:
+      - name: Deploy
+        run: |
+          # pwd
+          bash deploy.sh

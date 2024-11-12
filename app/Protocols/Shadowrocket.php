@@ -2,6 +2,9 @@
 
 namespace App\Protocols;
 
+use App\Models\User;
+use App\Models\Plan;
+use App\Services\UserService;
 use App\Utils\Helper;
 
 class Shadowrocket
@@ -20,6 +23,34 @@ class Shadowrocket
     {
         $servers = $this->servers;
         $user = $this->user;
+        $user = User::where('id', $user['id'])
+            ->select([
+                'id',
+                'email',
+                'is_admin',
+                'is_staff',
+                'plan_id',
+                'token',
+                'expired_at',
+                'u',
+                'd',
+                'transfer_enable',
+                'device_limit',
+                'uuid'
+            ])
+            ->first();
+        if (!$user) {
+            abort(500, __('The user does not exist'));
+        }
+        if ($user->plan_id) {
+            $user['plan'] = Plan::find($user->plan_id);
+            if (!$user['plan']) {
+                abort(500, __('Subscription plan does not exist'));
+            }
+        }
+
+        $userService = new UserService();
+        $user['reset_day'] = $userService->getResetDay($user);
 
         $uri = '';
         //display remaining traffic and expire date
@@ -27,7 +58,8 @@ class Shadowrocket
         $download = round($user['d'] / (1024*1024*1024), 2);
         $totalTraffic = round($user['transfer_enable'] / (1024*1024*1024), 2);
         $expiredDate = date('Y-m-d', $user['expired_at']);
-        $uri .= "STATUS=🚀↑:{$upload}GB,↓:{$download}GB,TOT:{$totalTraffic}GB💡Expires:{$expiredDate}\r\n";
+        $resetText = (is_numeric($user['reset_day']) && $user['reset_day'] >= 0) ? " 🔄 Reset:{$user['reset_day']}D" : "";
+        $uri .= "STATUS=🚀↑:{$upload}G,↓:{$download}G,TOT:{$totalTraffic}G💡Expires:{$expiredDate}{$resetText}\r\n";
 
         foreach ($this->servers as $server) {
             if ($server['type'] === 'vmess'){

@@ -2,6 +2,10 @@
 
 namespace App\Protocols;
 
+use App\Models\User;
+use App\Models\Plan;
+use App\Services\UserService;
+use App\Utils\Helper;
 
 class QuantumultX
 {
@@ -20,7 +24,38 @@ class QuantumultX
         $servers = $this->servers;
         $user = $this->user;
         $uri = '';
-        header("subscription-userinfo: upload={$user['u']}; download={$user['d']}; total={$user['transfer_enable']}; expire={$user['expired_at']}");
+        $user = User::where('id', $user['id'])
+            ->select([
+                'id',
+                'email',
+                'is_admin',
+                'is_staff',
+                'plan_id',
+                'token',
+                'expired_at',
+                'u',
+                'd',
+                'transfer_enable',
+                'device_limit',
+                'uuid'
+            ])
+            ->first();
+        if (!$user) {
+            abort(500, __('The user does not exist'));
+        }
+        if ($user->plan_id) {
+            $user['plan'] = Plan::find($user->plan_id);
+            if (!$user['plan']) {
+                abort(500, __('Subscription plan does not exist'));
+            }
+        }
+
+        $userService = new UserService();
+        $user['reset_day'] = $userService->getResetDay($user);
+
+        header("subscription-userinfo: upload={$user['u']}; download={$user['d']}; total={$user['transfer_enable']}; expire={$user['expired_at']}; reset_day={$user['reset_day']}; plan_name=".rawurlencode($user['plan']['name']));
+        header("profile-web-page-url:" . config('v2board.app_url'));
+
         foreach ($servers as $item) {
             if ($item['type'] === 'shadowsocks') {
                 $uri .= self::buildShadowsocks($user['uuid'], $item);
